@@ -1,7 +1,14 @@
-cmake_minimum_required(VERSION 3.12)
+cmake_minimum_required(VERSION 3.20)
+
+### Project ###
+project(GameTemplate)
 
 # Something about fetchcontent and timestamps
 cmake_policy(SET CMP0135 NEW)
+# Make set override option
+cmake_policy(SET CMP0077 NEW)
+# force this policy in subdirs
+set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
 
 ### 3rd party libraries ###
 include(FetchContent)
@@ -38,8 +45,5 @@ FetchContent_Declare(
 )
 
 FetchContent_MakeAvailable(box2d)
-
-### Project ###
-project(GameTemplate)
 
 add_subdirectory(src)
