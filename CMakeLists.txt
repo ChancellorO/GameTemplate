@@ -10,6 +10,12 @@ cmake_policy(SET CMP0077 NEW)
 # force this policy in subdirs
 set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
 
+if(EMSCRIPTEN)
+	set(PLATFORM Web CACHE STRING "")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -sUSE_GLFW=3")
+	set(CMAKE_EXECUTABLE_SUFFIX ".html")
+endif()
+
 ### 3rd party libraries ###
 include(FetchContent)
 
