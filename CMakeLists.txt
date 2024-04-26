@@ -12,7 +12,7 @@ set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
 
 if(EMSCRIPTEN)
 	set(PLATFORM Web CACHE STRING "")
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -sUSE_GLFW=3 --preload-file ${CMAKE_SOURCE_DIR}/resources")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -sUSE_GLFW=3 --preload-file resources")
 	set(CMAKE_EXECUTABLE_SUFFIX ".html")
 endif()
 
