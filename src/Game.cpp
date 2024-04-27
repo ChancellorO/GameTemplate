@@ -1,189 +1,188 @@
 #include "Game.hpp"
 #include "Physics.hpp"
+#include "Rendering.hpp"
 
 #include <box2d/b2_distance.h>
+#include <raylib.h>
+#include <optional>
+#include <algorithm>
+#include <entt/entt.hpp>
+#include <iostream>
 
 using namespace entt::literals;
 
-// helper function
-entt::entity CreateSprite(entt::registry& reg, g::Transform trans, g::PhysicsObject po, g::Sprite s) {
-    entt::entity entity = reg.create();
+// struct CharacterInRange {
+// 	entt::
+// };
 
-    // Creating a Transform Component for the current entity, with the Transform object
-    // returns a reference to the newly created component
-    reg.emplace<g::Transform>(entity, trans);
-    reg.emplace<g::PhysicsObject>(entity, po);    
-    reg.emplace<g::Sprite>(entity, s);
+entt::entity CreateSprite(entt::registry& reg, g::Transform trans, g::PhysicsObject po, g::Sprite s){
+	entt::entity entity = reg.create();
 
-    return entity;
+	reg.emplace<g::Transform>(entity, trans);
+	reg.emplace<g::PhysicsObject>(entity, po);
+	reg.emplace<g::Sprite>(entity, s);
+
+	return entity;
 }
 
 void Game::Start() {
+	SetConfigFlags(0);
 
-    SetConfigFlags(0);
+	InitWindow(kWindowWidth, kWindowHeight, kWindowTitle);
 
-    InitWindow(kWindowWidth, kWindowHeight, kWindowTitle);
+	reg.ctx().emplace_as<Camera2D>("camera"_hs, Camera2D {
+		.offset = { 0 },
+		.target = { 0 },
+		.rotation = { 0 },
+		.zoom = kZoom
+	});
 
-    reg.ctx().emplace_as<Camera2D>("camera"_hs, Camera2D {
-        .offset = { 0 },
-        .target = { 0 },
-        .rotation = { 0 },
-        .zoom = kZoom,
-    });
+	systems = std::vector<std::shared_ptr<System>> {
+		std::make_shared<g::Rendering>(g::Rendering { *this }),
+		std::make_shared<g::Physics>(g::Physics { *this }),
+	};
 
-    systems = std::vector<std::shared_ptr<System>> {
-        std::make_shared<g::Physics>(g::Physics { *this })
-    };
+	for(auto& sys : systems){
+		sys->Start();
+	}
 
-    // auto& is getting the reference, guaranteeing that it is being shared somewhere else
-    for(auto& sys: systems) {
-        sys->Start();
-    };
+	auto entity = reg.create();
 
-    // creates new entity
-    auto entity = reg.create();
+	textureCache.load("cat"_hs, "resources/cat.jpg");
 
-    // loads cat texture
-    textureCache.load("cat"_hs, "resources/cat.jpg");
+	auto player = CreateSprite(
+		reg,
+		g::Transform {
+			.p = b2Vec2 { 10, 10 },
+			.halfExtents = b2Vec2 { 10, 10 },
+		},
+		g::PhysicsObject {
+			.dynamic = true,
+			.density = 10,
+			.fixedRotation = true,
+			.drag = 0,
+		},
+		g::Sprite { textureCache["cat"_hs] }
+	);
+	reg.emplace<entt::tag<"player"_hs>>(player);
 
-    // CreateSprite returns an entt::entity
-    auto player = CreateSprite(
-        reg,
-        g::Transform {
-            .p=b2Vec2 { 10, 10 },
-            .halfExtents = b2Vec2 { 10, 10},
-        },
-        g::PhysicsObject {
-            .dynamic = true,
-            .density = 1,
-            .fixedRotation = true,
-        },
-        g::Sprite { textureCache["cat"_hs] }
-    );
+	auto character = CreateSprite(
+		reg,
+		g::Transform {
+			.p = b2Vec2 { 50, 10 },
+			.halfExtents = b2Vec2 { 10, 10 },
+		},
+		g::PhysicsObject {
+			.dynamic = true,
+			.density = 5,
+			.fixedRotation = true,
+			.drag = 1,
+		},
+		g::Sprite { textureCache["cat"_hs] }
+	);
+	reg.emplace<entt::tag<"character"_hs>>(character);
 
-    // ask for clarification (pretty sure this is creating a component for the player entity, which is the tag player)
-    reg.emplace<entt::tag<"player"_hs>>(player);
-
-    // random character example
-    auto character = CreateSprite(
-        reg,
-        g::Transform {
-            .p=b2Vec2 { 50, 10 },
-            .halfExtents = b2Vec2 { 10, 10},
-        },
-        g::PhysicsObject {
-            .dynamic = true,
-            .density = 1,
-            .fixedRotation = true,
-        },
-        g::Sprite { textureCache["cat"_hs] }
-    );
-
-    reg.emplace<entt::tag<"character"_hs>>(character);
-
-    // ground
-    auto floor = CreateSprite(
-        reg,
-        g::Transform {
-            .p=b2Vec2 {  kWorldWidth / 2, kWorldHeight - 5 },
-            .halfExtents = b2Vec2 {  kWorldWidth / 2, 5 }, // 5 down and up?
-        },
-        g::PhysicsObject {
-            .dynamic = false, // therefore static so doesn't move
-            .density = 1,
-            .fixedRotation = true,
-        },
-        g::Sprite { textureCache["cat"_hs] }
-    );
-}
+	CreateSprite(
+		reg,
+		g::Transform {
+			.p = b2Vec2 { kWorldWidth / 2, kWorldHeight - 5 },
+			.halfExtents = b2Vec2 { kWorldWidth / 2, 5 },
+		},
+		g::PhysicsObject {},
+		g::Sprite { textureCache["cat"_hs] }
+	);}
 
 void Game::Update() {
-    BeginDrawing();
-    BeginMode2D(reg.ctx().get<Camera2D>("camera"_hs));
+	float dt = GetFrameTime();
 
-    // into the registry, grabs every component that has b2Body and tag player
-    // ask about b2Body and rigid body
-    reg.view<b2Body*, entt::tag<"player"_hs>>().each([&](auto entity, b2Body*& body) {
-        b2Vec2 inputDir {
-            IsKeyDown(KEY_D) * 1.0f + IsKeyDown(KEY_A) * -1.0f,
-            IsKeyDown(KEY_S) * 1.0f + IsKeyDown(KEY_W) * -1.0f,            
-        };
+	for(auto& sys : systems){
+		sys->Update(dt);
+	}
 
-        inputDir.Normalize();
-        // scalar for velocity
-        inputDir *= 100.0f;
+	reg.view<b2Body*, entt::tag<"player"_hs>>().each([&](entt::entity entity, b2Body*& body) {
+		b2Vec2 inputDir {
+			IsKeyDown(KEY_D) * 1.0f + IsKeyDown(KEY_A) * -1.0f,
+			IsKeyDown(KEY_S) * 1.0f + IsKeyDown(KEY_W) * -1.0f,
+		};
 
-        body->SetLinearVelocity(inputDir);
-    });
+		inputDir.Normalize();
+		inputDir *= 30.0f;
 
-    //logic for checking collision
-    reg.view<Transform, b2Body*, entt::tag<"player"_hs>>().each([&](auto entity,Transform& transform, b2Body*& body) {
-        // grabs the world component
-        auto world = reg.ctx().get<std::shared_ptr<b2World>>();
-        
-        auto contact_edge = body->GetContactList();
-        while(contact_edge) {
-            auto otherEntity = static_cast<entt::entity>(contact_edge->other->GetUserData().pointer);
-            if(reg.storage<entt::tag<"character"_hs>>().contains(otherEntity)) {
+		body->SetLinearVelocity(inputDir);
 
-            }
-            contact_edge = contact_edge->next;
-            // reg.view<b2Body*, entt::tag<"character"_hs>().each([&](auto otherEnt, b2Body *& otherBody) {
-            //     if(otherbody == contactEdge.other) {
 
-            //     }                
-            // });
-            // contact_edge = contact_edge->next;
-        }
+		if(IsKeyPressed(KEY_SPACE) && reg.ctx().contains<entt::entity>("touching_player"_hs)){
+			auto other = reg.ctx().get<entt::entity>("touching_player"_hs);
+			reg.remove<entt::tag<"player"_hs>>(entity);
+			reg.emplace<entt::tag<"character"_hs>>(entity);
 
-        // reg.view<b2Body*, entt::tag<"character"_hs>>().each([&](auto ch, b2Body*& chBody) {
-        //     b2DistanceProxy proxyA, proxyB;
-        //     proxyA.Set(body->fix)
-        //})
-    });        
+			reg.remove<entt::tag<"character"_hs>>(other);
+			reg.emplace<entt::tag<"player"_hs>>(other);
 
-    ClearBackground(kBackgroundColor);
+			reg.ctx().erase<entt::entity>("touching_player"_hs);
+		}
+	});
 
-    // ask about [&]
-    reg.view<g::Transform, g::Sprite>().each([&](auto entity, g::Transform& transform, auto& sprite){
-        DrawTexturePro(
-            sprite.tex,
-            Rectangle {
-                0, 0,
-                static_cast<float>(sprite.tex->width), 
-                static_cast<float>(sprite.tex->height),
-            },
-            Rectangle {
-                transform.p.x,
-                transform.p.y,
-                2 * transform.halfExtents.x,
-                2 * transform.halfExtents.y,                
-            },
-            Vector2 { transform.halfExtents.x, transform.halfExtents.y },
-            transform.angle * RAD2DEG,
-            RAYWHITE
-            );
-    });
+	reg.view<b2Body*, const g::Transform, entt::tag<"player"_hs>>().each([&](entt::entity entity, b2Body*& body, const g::Transform& t) {
+		auto world = reg.ctx().get<std::shared_ptr<b2World>>();
 
-    EndMode2D();
-    EndDrawing();
-    
-    float dt = GetFrameTime();
+		bool contacting = false;
 
-    for(auto& sys : systems) {
-        sys->Update(dt);
-    }
+		struct BBResults : public b2QueryCallback {
+			Game& g;
+			b2Body* playerBody;
+			std::optional<std::pair<float, entt::entity>> result;
+			BBResults(Game& g, b2Body* playerBody) : g{g}, playerBody{playerBody} {}
 
-    if(dt < 1/60.0f) {
-        WaitTime(1/60.0f - dt);
-    }
+			bool ReportFixture(b2Fixture* fixture) override {
+				b2Vec2 vec = fixture->GetBody()->GetPosition();
+				vec -= playerBody->GetPosition();
+				float dist2 = vec.LengthSquared();
 
+				float otherDist2 = result.has_value() ? result->first : INFINITY;
+				if(otherDist2 < dist2) return true;
+
+				auto ent = static_cast<entt::entity>(fixture->GetBody()->GetUserData().pointer);
+				if(g.reg.storage<entt::tag<"character"_hs>>().contains(ent)) {
+					result = std::make_pair(dist2, ent);
+				}
+				return true;
+			};
+		};
+
+		BBResults res { game, body };
+		b2AABB bb;
+
+		b2Vec2 swapRangeExtents {
+			kCharacterSwapRange + t.halfExtents.x,
+			kCharacterSwapRange + t.halfExtents.y,
+		};
+
+		bb.lowerBound = body->GetPosition();
+		bb.lowerBound -= swapRangeExtents;
+		bb.upperBound = body->GetPosition();
+		bb.upperBound += swapRangeExtents;
+		world->QueryAABB(&res, bb);
+
+		if(res.result){
+			auto other = res.result->second;
+			reg.ctx().emplace_as<entt::entity>("touching_player"_hs, other);
+		}
+		else {
+			reg.ctx().erase<entt::entity>("touching_player"_hs);
+		}
+	});
+
+	if(dt < 1/60.0f){
+		WaitTime(1/60.0f - dt);
+	}
 }
 
 void Game::Destroy() {
-    for(auto& sys : systems) {
-        sys->Destroy();
-    }
-    textureCache.clear();
-    CloseWindow();
+	for(auto& sys : systems){
+		sys->Destroy();
+	}
+
+	textureCache.clear();
+	CloseWindow();
 }
