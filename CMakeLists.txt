@@ -1,10 +1,12 @@
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.16)
 
 ### Project ###
 project(GameTemplate)
 
 # Something about fetchcontent and timestamps
-cmake_policy(SET CMP0135 NEW)
+if(CMAKE_VERSION VERSION_GREATER "3.19.0") 
+	cmake_policy(SET CMP0135 NEW)	
+endif()
 # Make set override option
 cmake_policy(SET CMP0077 NEW)
 # force this policy in subdirs
