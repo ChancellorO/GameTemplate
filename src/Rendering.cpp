@@ -29,7 +29,34 @@ void g::Rendering::Update(float dt){
 		);
 	});
 
+	g.reg.view<g::AnimationController, g::Sprite>().each([&](AnimationController& ac, Sprite& s ) {
+		UpdateAnimation(ac, s);
+	});
 	EndMode2D();
 	EndDrawing();
 }
 void g::Rendering::Destroy(){}
+
+void g::Rendering::UpdateAnimation(AnimationController& ac, Sprite& s ) {
+
+	//guard clause
+	if (GetTime() <= ac.last_frame_time + ac.frame_interval) {
+		return;
+	}
+	
+	if (ac.textures.size() == 0) {
+		return;
+	}
+
+	if (ac.current_frame + 1 < ac.textures.size()) {
+		ac.current_frame++;
+	} else {
+		ac.current_frame = 0;
+	}
+
+	// Change sprite's texture
+	s.tex = ac.textures[ac.current_frame];
+
+	ac.last_frame_time = GetTime();
+
+}

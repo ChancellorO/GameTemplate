@@ -15,12 +15,13 @@ using namespace entt::literals;
 // 	entt::
 // };
 
-entt::entity CreateSprite(entt::registry& reg, g::Transform trans, g::PhysicsObject po, g::Sprite s){
+entt::entity CreateSprite(entt::registry& reg, g::Transform trans, g::PhysicsObject po, g::Sprite s, g::AnimationController ac){
 	entt::entity entity = reg.create();
 
 	reg.emplace<g::Transform>(entity, trans);
 	reg.emplace<g::PhysicsObject>(entity, po);
 	reg.emplace<g::Sprite>(entity, s);
+    reg.emplace<g::AnimationController>(entity, ac);
 
 	return entity;
 }
@@ -49,12 +50,32 @@ void Game::Start() {
 	auto entity = reg.create();
 
 	textureCache.load("cat"_hs, "resources/cat.jpg");
+    textureCache.load("computer_run0"_hs, "resources/computer_run/sprite_0.png");
+    textureCache.load("computer_run1"_hs, "resources/computer_run/sprite_1.png");    
+    textureCache.load("computer_run2"_hs, "resources/computer_run/sprite_2.png");
+    textureCache.load("computer_idle0"_hs, "resources/computer_idle/sprite_0.png");
+    textureCache.load("computer_idle1"_hs, "resources/computer_idle/sprite_1.png");    
+    textureCache.load("battery_run0"_hs, "resources/battery_run/sprite_0.png");
+    textureCache.load("battery_run1"_hs, "resources/battery_run/sprite_1.png");
+    textureCache.load("battery_run2"_hs, "resources/battery_run/sprite_2.png");
+    textureCache.load("battery_run3"_hs, "resources/battery_run/sprite_3.png");
+    textureCache.load("battery_idle0"_hs, "resources/battery_idle/sprite_0.png");
+    textureCache.load("battery_idle1"_hs, "resources/battery_idle/sprite_1.png");
+    textureCache.load("battery_idle2"_hs, "resources/battery_idle/sprite_2.png");
+    textureCache.load("battery_idle0"_hs, "resources/battery_idle/sprite_0.png");
+    textureCache.load("alarm_idle0"_hs, "resources/alarm_idle/sprite_0.png");
+    textureCache.load("alarm_idle1"_hs, "resources/alarm_idle/sprite_1.png");
+    textureCache.load("water_idle0"_hs, "resources/alarm_idle/sprite_0.png");
+    textureCache.load("water_idle1"_hs, "resources/alarm_idle/sprite_1.png");
+    textureCache.load("water_idle2"_hs, "resources/alarm_idle/sprite_2.png");
+    
+
 
 	auto player = CreateSprite(
 		reg,
 		g::Transform {
 			.p = b2Vec2 { 10, 10 },
-			.halfExtents = b2Vec2 { 10, 10 },
+			.halfExtents = b2Vec2 { 16, 16 },
 		},
 		g::PhysicsObject {
 			.dynamic = true,
@@ -63,7 +84,10 @@ void Game::Start() {
 			.drag = 0,
 			.halfExtentOffset = { -3, -3 },
 		},
-		g::Sprite { textureCache["cat"_hs] }
+		g::Sprite { textureCache["cat"_hs] },
+        g::AnimationController {
+            .textures = {textureCache["battery_run0"_hs], textureCache["battery_run1"_hs], textureCache["battery_run2"_hs], textureCache["battery_run3"_hs]},
+        }
 	);
 	reg.emplace<entt::tag<"player"_hs>>(player);
 
@@ -71,15 +95,21 @@ void Game::Start() {
 		reg,
 		g::Transform {
 			.p = b2Vec2 { 50, 10 },
-			.halfExtents = b2Vec2 { 10, 10 },
+			.halfExtents = b2Vec2 { 16, 16 },
 		},
 		g::PhysicsObject {
 			.dynamic = true,
 			.density = 5,
 			.fixedRotation = true,
 			.drag = 1,
+            .positionOffset = b2Vec2 { -4, -1 },
+            .halfExtentOffset = b2Vec2 { -7, -4 },
+            
 		},
-		g::Sprite { textureCache["cat"_hs] }
+		g::Sprite { textureCache["cat"_hs] },
+        g::AnimationController {
+            .textures = {textureCache["computer_run0"_hs], textureCache["computer_run1"_hs], textureCache["computer_run2"_hs]}
+        }        
 	);
 	reg.emplace<entt::tag<"character"_hs>>(character);
 
@@ -90,7 +120,9 @@ void Game::Start() {
 			.halfExtents = b2Vec2 { kWorldWidth / 2, 5 },
 		},
 		g::PhysicsObject {},
-		g::Sprite { textureCache["cat"_hs] }
+		g::Sprite { textureCache["cat"_hs] },
+        g::AnimationController {
+        }        
 	);}
 
 void Game::Update() {
@@ -174,7 +206,7 @@ void Game::Update() {
 		}
 	});
 
-	if(dt < 1/60.0f){
+	if (dt < 1/60.0f){
 		WaitTime(1/60.0f - dt);
 	}
 }

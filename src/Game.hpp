@@ -41,10 +41,6 @@ namespace g {
 		b2Vec2 halfExtents;
 	};
 
-	struct Sprite {
-		entt::resource<Texture> tex;
-	};
-
 }
 
 struct System;
