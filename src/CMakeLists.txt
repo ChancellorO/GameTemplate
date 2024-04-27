@@ -4,6 +4,12 @@ add_executable(Game ${GAME_SOURCES})
 
 target_link_libraries(Game raylib EnTT box2d)
 
+set_target_properties(
+	Game
+	PROPERTIES
+	CXX_STANDARD 20
+)
+
 # Copy resources dir to binary dir
 add_custom_command(
 	TARGET Game
