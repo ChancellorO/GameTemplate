@@ -11,12 +11,22 @@
 
 namespace g {
 	struct PhysicsObject {
-		bool dynamic;
-		float density;
-		float friction;
-		float gravityScale;
-		bool fixedRotation;
-		float drag;
+		/// @brief if true, the body will have forces applied to it
+		bool dynamic = false;
+		/// @brief the weight of the body
+		float density = 10;
+		float friction = 0;
+		/// @brief set to 0 for no gravity
+		float gravityScale = 0;
+		/// @brief if true, the body will not rotate
+		bool fixedRotation = true;
+		/// @brief slowing force so that does not move linearly infinitely
+		float drag = 1;
+
+		/// @brief the position of the collider relative to the transform center
+		b2Vec2 positionOffset = { 0, 0 };
+		/// @brief the size of the collider relative to the transform rect
+		b2Vec2 halfExtentOffset = { 0, 0 };
 	};
 
 	struct Physics : public System {

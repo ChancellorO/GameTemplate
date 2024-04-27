@@ -12,23 +12,25 @@ void g::Physics::Start() {
 
 void g::Physics::Update(float dt) {
 	// syncing physics with transform
-	g.reg.view<b2Body*, g::Transform>().each([](auto entity, b2Body*& body, g::Transform& transform) {
-		body->SetTransform(transform.p, transform.angle);
+	g.reg.view<const g::PhysicsObject, b2Body*, g::Transform>().each([](auto entity, const g::PhysicsObject& po, b2Body*& body, g::Transform& transform) {
+		b2Vec2 newPos = transform.p;
+		newPos += po.positionOffset;
+		body->SetTransform(newPos, transform.angle);
 	});
 
 	// applying drag
 	g.reg.view<b2Body*, g::PhysicsObject>().each([](auto entity, b2Body*& body, g::PhysicsObject& po) {
 		b2Vec2 drag = body->GetLinearVelocity();
 		drag *= -po.drag * 1000.0f;
-		// std::cout << drag.x << ", " << drag.y << std::endl;
 		body->ApplyForceToCenter(drag, false);
 	});
 
 	world->Step(dt, 8, 3);
 
 	// syncing transform with physics
-	g.reg.view<b2Body*, g::Transform>().each([](auto entity, b2Body*& body, g::Transform& transform) {
+	g.reg.view<const g::PhysicsObject, b2Body*, g::Transform>().each([](auto entity, const g::PhysicsObject& po, b2Body*& body, g::Transform& transform) {
 		transform.p = body->GetPosition();
+		transform.p -= po.positionOffset;
 		transform.angle = body->GetAngle();
 	});
 }
@@ -41,6 +43,7 @@ void g::Physics::OnPhysicsObjectConstruct(entt::registry&, entt::entity entity) 
 	b2BodyDef bodyDef;
 	bodyDef.type = physicsObject.dynamic ? b2_dynamicBody : b2_staticBody;
 	bodyDef.position = transform.p;
+	bodyDef.position += physicsObject.positionOffset;
 	bodyDef.angle = transform.angle;
 	bodyDef.gravityScale = physicsObject.gravityScale;
 	bodyDef.fixedRotation = physicsObject.fixedRotation;
@@ -49,7 +52,9 @@ void g::Physics::OnPhysicsObjectConstruct(entt::registry&, entt::entity entity) 
 	b2Body* body = world->CreateBody(&bodyDef);
 
 	b2PolygonShape shape;
-	shape.SetAsBox(transform.halfExtents.x, transform.halfExtents.y);
+	b2Vec2 halfExtents = transform.halfExtents;
+	halfExtents += physicsObject.halfExtentOffset;
+	shape.SetAsBox(halfExtents.x, halfExtents.y);
 
 	b2FixtureDef fixtureDef;
 	fixtureDef.density = physicsObject.density;

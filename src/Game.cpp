@@ -61,6 +61,7 @@ void Game::Start() {
 			.density = 10,
 			.fixedRotation = true,
 			.drag = 0,
+			.halfExtentOffset = { -3, -3 },
 		},
 		g::Sprite { textureCache["cat"_hs] }
 	);
