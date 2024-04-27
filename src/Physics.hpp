@@ -17,7 +17,7 @@ namespace g {
 		float density = 10;
 		float friction = 0;
 		/// @brief set to 0 for no gravity
-		float gravityScale = 0;
+		float gravityScale = 1;
 		/// @brief if true, the body will not rotate
 		bool fixedRotation = true;
 		/// @brief slowing force so that does not move linearly infinitely
