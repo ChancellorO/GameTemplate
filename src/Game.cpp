@@ -11,9 +11,18 @@
 
 using namespace entt::literals;
 
-// struct CharacterInRange {
-// 	entt::
-// };
+struct WalkingCharacter {
+	float speed = 30;
+};
+
+struct JumpingCharacter {
+	float strength = 100;
+
+	bool isJumping = false;
+	double jumpDuration = 0.5;
+	double jumpStartTime = INFINITY;
+	double lastJumpTime = -INFINITY;
+};
 
 entt::entity CreateSprite(entt::registry& reg, g::Transform trans, g::PhysicsObject po, g::Sprite s, g::AnimationController ac){
 	entt::entity entity = reg.create();
@@ -51,10 +60,10 @@ void Game::Start() {
 
 	textureCache.load("cat"_hs, "resources/cat.jpg");
     textureCache.load("computer_run0"_hs, "resources/computer_run/sprite_0.png");
-    textureCache.load("computer_run1"_hs, "resources/computer_run/sprite_1.png");    
+    textureCache.load("computer_run1"_hs, "resources/computer_run/sprite_1.png");
     textureCache.load("computer_run2"_hs, "resources/computer_run/sprite_2.png");
     textureCache.load("computer_idle0"_hs, "resources/computer_idle/sprite_0.png");
-    textureCache.load("computer_idle1"_hs, "resources/computer_idle/sprite_1.png");    
+    textureCache.load("computer_idle1"_hs, "resources/computer_idle/sprite_1.png");
     textureCache.load("battery_run0"_hs, "resources/battery_run/sprite_0.png");
     textureCache.load("battery_run1"_hs, "resources/battery_run/sprite_1.png");
     textureCache.load("battery_run2"_hs, "resources/battery_run/sprite_2.png");
@@ -68,7 +77,7 @@ void Game::Start() {
     textureCache.load("water_idle0"_hs, "resources/alarm_idle/sprite_0.png");
     textureCache.load("water_idle1"_hs, "resources/alarm_idle/sprite_1.png");
     textureCache.load("water_idle2"_hs, "resources/alarm_idle/sprite_2.png");
-    
+
 
 
 	auto player = CreateSprite(
@@ -79,7 +88,7 @@ void Game::Start() {
 		},
 		g::PhysicsObject {
 			.dynamic = true,
-			.density = 10,
+			.density = 1,
 			.fixedRotation = true,
 			.drag = 0,
 			.halfExtentOffset = { -3, -3 },
@@ -90,6 +99,12 @@ void Game::Start() {
         }
 	);
 	reg.emplace<entt::tag<"player"_hs>>(player);
+	reg.emplace<entt::tag<"battery"_hs>>(player);
+	reg.emplace<WalkingCharacter>(player, WalkingCharacter {});
+	reg.emplace<JumpingCharacter>(player, JumpingCharacter {
+		.strength = 100,
+	});
+
 
 	auto character = CreateSprite(
 		reg,
@@ -104,14 +119,16 @@ void Game::Start() {
 			.drag = 1,
             .positionOffset = b2Vec2 { -4, -1 },
             .halfExtentOffset = b2Vec2 { -7, -4 },
-            
+
 		},
 		g::Sprite { textureCache["cat"_hs] },
         g::AnimationController {
             .textures = {textureCache["computer_run0"_hs], textureCache["computer_run1"_hs], textureCache["computer_run2"_hs]}
-        }        
+        }
 	);
 	reg.emplace<entt::tag<"character"_hs>>(character);
+	reg.emplace<entt::tag<"clock"_hs>>(character);
+	reg.emplace<WalkingCharacter>(character, WalkingCharacter { .speed = 10 });
 
 	CreateSprite(
 		reg,
@@ -122,39 +139,109 @@ void Game::Start() {
 		g::PhysicsObject {},
 		g::Sprite { textureCache["cat"_hs] },
         g::AnimationController {
-        }        
-	);}
+        }
+	);
+}
 
 void Game::Update() {
 	float dt = GetFrameTime();
+
+	reg.view<
+		b2Body*,
+		const g::Transform,
+		const g::PhysicsObject,
+		JumpingCharacter,
+		entt::tag<"player"_hs>
+	>()
+		.each([&](
+			entt::entity entity,
+			b2Body*& body,
+			const g::Transform trans,
+			const g::PhysicsObject& po,
+			JumpingCharacter& ch
+		) {
+			struct RaycastResult : public b2RayCastCallback {
+				bool hit = false;
+				float ReportFixture(
+					b2Fixture* fixture,
+					const b2Vec2& point,
+					const b2Vec2& normal,
+					float fraction
+				) override {
+					hit = true;
+					return 0;
+				}
+			};
+
+			if(IsKeyPressed(KEY_W) && GetTime() > ch.lastJumpTime + 0.2){
+				auto& world = reg.ctx().get<std::shared_ptr<b2World>>();
+				RaycastResult res;
+				b2Vec2 initPos = body->GetPosition();
+				b2Vec2 finalPos = initPos;
+				finalPos += b2Vec2{0, trans.halfExtents.y + po.halfExtentOffset.y + 1.0f};
+				world->RayCast(&res, initPos, finalPos);
+				if(res.hit){
+					b2Vec2 jumpImpulse { 0, -100 * ch.strength };
+					body->ApplyLinearImpulseToCenter(jumpImpulse, true);
+					ch.lastJumpTime = GetTime();
+					ch.jumpStartTime = GetTime();
+					ch.isJumping = true;
+				}
+			}
+		});
+
+	reg.view<
+		b2Body*,
+		JumpingCharacter
+	>().each([&](entt::entity e, b2Body* body, JumpingCharacter& ch){
+		if(!ch.isJumping) return;
+
+		if(!reg.storage<entt::tag<"player"_hs>>().contains(e)) {
+			std::cout << "StoppedA" << std::endl;
+			ch.isJumping = false;
+		}
+		else{
+			if(!IsKeyDown(KEY_W) || GetTime() > ch.jumpStartTime + ch.jumpDuration){
+				std::cout << "Stopped" << std::endl;
+				ch.isJumping = false;
+			}
+		}
+
+		if(ch.isJumping){
+			b2Vec2 force = { 0, -150 * ch.strength };
+			body->ApplyForceToCenter(force, true);
+		}
+	});
 
 	for(auto& sys : systems){
 		sys->Update(dt);
 	}
 
-	reg.view<b2Body*, entt::tag<"player"_hs>>().each([&](entt::entity entity, b2Body*& body) {
-		b2Vec2 inputDir {
-			IsKeyDown(KEY_D) * 1.0f + IsKeyDown(KEY_A) * -1.0f,
-			IsKeyDown(KEY_S) * 1.0f + IsKeyDown(KEY_W) * -1.0f,
-		};
+	reg.view<b2Body*, const WalkingCharacter, entt::tag<"player"_hs>>()
+		.each([&](entt::entity entity, b2Body*& body, const WalkingCharacter& ch) {
+			b2Vec2 inputDir {
+				IsKeyDown(KEY_D) * 1.0f + IsKeyDown(KEY_A) * -1.0f,
+				IsKeyDown(KEY_S) * 1.0f + IsKeyDown(KEY_W) * -1.0f,
+			};
 
-		inputDir.Normalize();
-		inputDir *= 30.0f;
+			inputDir.Normalize();
 
-		body->SetLinearVelocity(inputDir);
+			b2Vec2 vel = body->GetLinearVelocity();
+			vel.x = inputDir.x * ch.speed;
 
+			body->SetLinearVelocity(vel);
 
-		if(IsKeyPressed(KEY_SPACE) && reg.ctx().contains<entt::entity>("touching_player"_hs)){
-			auto other = reg.ctx().get<entt::entity>("touching_player"_hs);
-			reg.remove<entt::tag<"player"_hs>>(entity);
-			reg.emplace<entt::tag<"character"_hs>>(entity);
+			if(IsKeyPressed(KEY_SPACE) && reg.ctx().contains<entt::entity>("touching_player"_hs)){
+				auto other = reg.ctx().get<entt::entity>("touching_player"_hs);
+				reg.remove<entt::tag<"player"_hs>>(entity);
+				reg.emplace<entt::tag<"character"_hs>>(entity);
 
-			reg.remove<entt::tag<"character"_hs>>(other);
-			reg.emplace<entt::tag<"player"_hs>>(other);
+				reg.remove<entt::tag<"character"_hs>>(other);
+				reg.emplace<entt::tag<"player"_hs>>(other);
 
-			reg.ctx().erase<entt::entity>("touching_player"_hs);
-		}
-	});
+				reg.ctx().erase<entt::entity>("touching_player"_hs);
+			}
+		});
 
 	reg.view<b2Body*, const g::Transform, entt::tag<"player"_hs>>().each([&](entt::entity entity, b2Body*& body, const g::Transform& t) {
 		auto world = reg.ctx().get<std::shared_ptr<b2World>>();

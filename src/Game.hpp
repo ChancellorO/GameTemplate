@@ -15,6 +15,8 @@ constexpr int kWorldWidth = 640 / kZoom;
 constexpr int kWorldHeight = 480 / kZoom;
 inline const char* kWindowTitle = "Title";
 
+constexpr float kGravity = 100.0f;
+
 constexpr float kCharacterSwapRange = 10.0f;
 
 constexpr Color kBackgroundColor = Color { 255, 255, 255, 255 };

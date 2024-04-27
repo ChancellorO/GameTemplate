@@ -3,7 +3,7 @@
 #include <iostream>
 
 void g::Physics::Start() {
-	auto gravity = b2Vec2{0, 10};
+	auto gravity = b2Vec2{0, kGravity};
 	world = std::make_shared<b2World>(gravity);
 	g.reg.ctx().emplace<std::shared_ptr<b2World>>(world);
 
