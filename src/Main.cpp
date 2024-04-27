@@ -3,6 +3,8 @@
 #include <entt/entt.hpp>
 #include "Game.hpp"
 
+#include "Game.hpp"
+
 #ifdef PLATFORM_WEB
 #include <emscripten/emscripten.h>
 #endif
