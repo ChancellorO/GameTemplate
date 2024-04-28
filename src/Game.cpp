@@ -74,9 +74,11 @@ void Game::Start() {
     textureCache.load("battery_idle0"_hs, "resources/battery_idle/sprite_0.png");
     textureCache.load("alarm_idle0"_hs, "resources/alarm_idle/sprite_0.png");
     textureCache.load("alarm_idle1"_hs, "resources/alarm_idle/sprite_1.png");
-    textureCache.load("water_idle0"_hs, "resources/alarm_idle/sprite_0.png");
-    textureCache.load("water_idle1"_hs, "resources/alarm_idle/sprite_1.png");
-    textureCache.load("water_idle2"_hs, "resources/alarm_idle/sprite_2.png");
+    textureCache.load("water_idle0"_hs, "resources/water_idle/sprite_0.png");
+    textureCache.load("water_idle1"_hs, "resources/water_idle/sprite_1.png");
+    textureCache.load("water_idle2"_hs, "resources/water_idle/sprite_2.png");
+    textureCache.load("water0"_hs, "resources/water/sprite_0.png");
+    textureCache.load("water1"_hs, "resources/water/sprite_1.png");    
 
 
 
@@ -130,7 +132,8 @@ void Game::Start() {
 	reg.emplace<entt::tag<"clock"_hs>>(character);
 	reg.emplace<WalkingCharacter>(character, WalkingCharacter { .speed = 10 });
 
-	CreateSprite(
+	//floor
+    CreateSprite(
 		reg,
 		g::Transform {
 			.p = b2Vec2 { kWorldWidth / 2, kWorldHeight - 5 },
@@ -141,6 +144,24 @@ void Game::Start() {
         g::AnimationController {
         }
 	);
+
+    //water
+    auto water = CreateSprite(
+        reg,
+        g::Transform {
+            .p = b2Vec2 { kWorldWidth / 2, kWorldHeight - 20 },
+            .halfExtents = b2Vec2 { kWorldWidth / 4, 5}
+        },
+        g::PhysicsObject {
+			.isSensor = true,
+		},
+        g::Sprite { textureCache["water0"_hs] },
+        g::AnimationController {
+            .textures = {textureCache["water0"_hs], textureCache["water1"_hs]},
+        }
+    );
+    
+    reg.emplace<entt::tag<"water"_hs>>(water);
 }
 
 void Game::Update() {
@@ -152,8 +173,7 @@ void Game::Update() {
 		const g::PhysicsObject,
 		JumpingCharacter,
 		entt::tag<"player"_hs>
-	>()
-		.each([&](
+	>().each([&](
 			entt::entity entity,
 			b2Body*& body,
 			const g::Transform trans,
@@ -242,6 +262,49 @@ void Game::Update() {
 				reg.ctx().erase<entt::entity>("touching_player"_hs);
 			}
 		});
+
+    reg.view<b2Body*, entt::tag<"water"_hs>>().each([&](entt::entity entity, b2Body*& body) {
+        auto world = reg.ctx().get<std::shared_ptr<b2World>>();
+
+        bool contacting = false;
+
+		auto current_node = body->GetContactList();
+
+		while(current_node) {
+			auto other_body = current_node->other;
+
+			auto other_entity = static_cast<entt::entity>(other_body->GetUserData().pointer);
+
+			if (reg.storage<entt::tag<"player"_hs>>().contains(other_entity) && 
+				!reg.storage<entt::tag<"electricity"_hs>>().contains(other_entity)
+				) {
+				auto transform = reg.get<g::Transform>(other_entity);
+				auto player = CreateSprite(
+				reg,
+				g::Transform { transform },
+				g::PhysicsObject {
+					.dynamic = true,
+					.density = 1,
+					.fixedRotation = true,
+					.drag = 0,
+					.halfExtentOffset = { -3, -3 },
+				},
+				g::Sprite { textureCache["water_idle0"_hs] },
+				g::AnimationController {
+					.textures = {textureCache["water_idle0"_hs], textureCache["water_idle1"_hs], textureCache["water_idle2"_hs],},
+				}
+				);
+				reg.destroy(other_entity);
+				reg.emplace<entt::tag<"player"_hs>>(player);
+				reg.emplace<entt::tag<"electricity"_hs>>(player);
+				reg.emplace<WalkingCharacter>(player, WalkingCharacter {});
+				reg.emplace<JumpingCharacter>(player, JumpingCharacter {});
+				break;
+			}
+			current_node = current_node->next;
+		}
+
+    });
 
 	reg.view<b2Body*, const g::Transform, entt::tag<"player"_hs>>().each([&](entt::entity entity, b2Body*& body, const g::Transform& t) {
 		auto world = reg.ctx().get<std::shared_ptr<b2World>>();

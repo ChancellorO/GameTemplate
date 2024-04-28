@@ -22,7 +22,8 @@ namespace g {
 		bool fixedRotation = true;
 		/// @brief slowing force so that does not move linearly infinitely
 		float drag = 1;
-
+        /// @brief Check for collision with water
+        bool isSensor = false;
 		/// @brief the position of the collider relative to the transform center
 		b2Vec2 positionOffset = { 0, 0 };
 		/// @brief the size of the collider relative to the transform rect
@@ -36,6 +37,8 @@ namespace g {
 
 		void Start() override;
 		void Update(float dt) override;
+
+		void OnPhysicsObjectDestruct(entt::registry&, entt::entity entity);
 
 		void OnPhysicsObjectConstruct(entt::registry&, entt::entity entity);
 	};

@@ -6,6 +6,7 @@
 #include <entt/entt.hpp>
 #include <box2d/box2d.h>
 #include <memory>
+#include <iostream>
 
 // constexpr evaluates the value of a variable or function at compile time.
 constexpr float kZoom = 5.0f;
@@ -25,8 +26,13 @@ struct TextureLoader {
 	using result_type = std::shared_ptr<Texture>;
 
 	result_type operator()(const char* path) {
+        auto tex = LoadTexture(path);
+        if (tex.id == 0) {
+            std::cerr << "COULD NOT LOAD TEXTURE: " << path << std::endl;
+            throw std::runtime_error{ "COULD NOT LOAD TEXTURE" };
+        }
 		return std::shared_ptr<Texture>(
-			new Texture { LoadTexture(path) },
+			new Texture { tex },
 			[](Texture* tex){
 				UnloadTexture(*tex);
 				delete tex;

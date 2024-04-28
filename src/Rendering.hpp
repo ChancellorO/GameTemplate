@@ -5,7 +5,7 @@
 namespace g {
 	struct AnimationController {
 		std::vector<entt::resource<Texture>> textures;
-		double frame_interval = 0.5;
+		double frame_interval = 0.1;
 		int current_frame = -1;
 		double last_frame_time = -INFINITY;
 	};

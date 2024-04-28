@@ -8,6 +8,7 @@ void g::Physics::Start() {
 	g.reg.ctx().emplace<std::shared_ptr<b2World>>(world);
 
 	g.reg.on_construct<g::PhysicsObject>().connect<&Physics::OnPhysicsObjectConstruct>(*this);
+	g.reg.on_destroy<b2Body*>().connect<&Physics::OnPhysicsObjectDestruct>(*this);
 }
 
 void g::Physics::Update(float dt) {
@@ -35,6 +36,11 @@ void g::Physics::Update(float dt) {
 	});
 }
 
+void g::Physics::OnPhysicsObjectDestruct(entt::registry&, entt::entity entity) {
+	auto b2b = g.reg.get<b2Body*>(entity);
+	world->DestroyBody(b2b);
+}
+
 void g::Physics::OnPhysicsObjectConstruct(entt::registry&, entt::entity entity) {
 	auto& transform = g.reg.get_or_emplace<g::Transform>(entity, g::Transform{});
 
@@ -60,6 +66,7 @@ void g::Physics::OnPhysicsObjectConstruct(entt::registry&, entt::entity entity) 
 	fixtureDef.density = physicsObject.density;
 	fixtureDef.friction = physicsObject.friction;
 	fixtureDef.shape = &shape;
+    fixtureDef.isSensor = physicsObject.isSensor;
 
 	body->CreateFixture(&fixtureDef);
 
