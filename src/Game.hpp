@@ -1,5 +1,7 @@
 #pragma once
 
+#include <iostream>
+
 #include <raylib.h>
 #include <entt/resource/resource.hpp>
 #include <entt/resource/cache.hpp>
@@ -35,6 +37,26 @@ struct TextureLoader {
 	}
 };
 
+struct FontLoader {
+	using result_type = std::shared_ptr<Font>;
+
+	result_type operator()(const char* path) {
+		Font font = LoadFont(path);
+		if(font.texture.id == 0) {
+			std::cerr << "Could not load font: " << path << std::endl;
+			throw std::runtime_error{"Could not load font"};
+		}
+		return std::shared_ptr<Font>(
+			new Font { LoadFont(path) },
+			[](Font* f){
+				UnloadFont(*f);
+				delete f;
+			}
+		);
+	}
+};
+
+
 namespace g {
 
 	struct Transform {
@@ -50,12 +72,15 @@ struct System;
 struct Game {
 	entt::registry reg;
 	entt::resource_cache<Texture, TextureLoader> textureCache;
+	entt::resource_cache<Font, FontLoader> fontCache;
 
 	std::vector<std::shared_ptr<System>> systems;
 
 	void Start();
 	void Update();
 	void Destroy();
+
+	void AddGameOverUI();
 };
 
 struct System {

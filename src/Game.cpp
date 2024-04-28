@@ -24,6 +24,17 @@ struct JumpingCharacter {
 	double lastJumpTime = -INFINITY;
 };
 
+struct Character {
+	float energy = 10.0f;
+	float energyUseRate = 1.0f;
+};
+
+using SavedObjectTag = entt::tag<"dynamic_object"_hs>;
+
+using TemporaryCharacter = entt::tag<"temporary_character"_hs>;
+
+using EnergyBarTag = entt::tag<"energy_bar"_hs>;
+
 entt::entity CreateSprite(entt::registry& reg, g::Transform trans, g::PhysicsObject po, g::Sprite s, g::AnimationController ac){
 	entt::entity entity = reg.create();
 
@@ -40,13 +51,6 @@ void Game::Start() {
 
 	InitWindow(kWindowWidth, kWindowHeight, kWindowTitle);
 
-	reg.ctx().emplace_as<Camera2D>("camera"_hs, Camera2D {
-		.offset = { 0 },
-		.target = { 0 },
-		.rotation = { 0 },
-		.zoom = kZoom
-	});
-
 	systems = std::vector<std::shared_ptr<System>> {
 		std::make_shared<g::Rendering>(g::Rendering { *this }),
 		std::make_shared<g::Physics>(g::Physics { *this }),
@@ -55,6 +59,15 @@ void Game::Start() {
 	for(auto& sys : systems){
 		sys->Start();
 	}
+
+	auto cameraEntity = reg.create();
+	auto& camera = reg.emplace<Camera2D>(cameraEntity, Camera2D {
+		.offset = { 0 },
+		.target = { 0 },
+		.rotation = { 0 },
+		.zoom = kZoom
+	});
+	reg.ctx().emplace_as<Camera2D&>("main_camera"_hs, camera);
 
 	auto entity = reg.create();
 
@@ -78,7 +91,7 @@ void Game::Start() {
     textureCache.load("water_idle1"_hs, "resources/alarm_idle/sprite_1.png");
     textureCache.load("water_idle2"_hs, "resources/alarm_idle/sprite_2.png");
 
-
+	fontCache.load("m5x7"_hs, "resources/fonts/m5x7.ttf");
 
 	auto player = CreateSprite(
 		reg,
@@ -100,10 +113,16 @@ void Game::Start() {
 	);
 	reg.emplace<entt::tag<"player"_hs>>(player);
 	reg.emplace<entt::tag<"battery"_hs>>(player);
+	reg.emplace<Character>(player, Character {
+		.energy = 50,
+		.energyUseRate = 50,
+	});
 	reg.emplace<WalkingCharacter>(player, WalkingCharacter {});
 	reg.emplace<JumpingCharacter>(player, JumpingCharacter {
 		.strength = 100,
 	});
+	reg.emplace<TemporaryCharacter>(player);
+	reg.emplace<SavedObjectTag>(player);
 
 
 	auto character = CreateSprite(
@@ -126,9 +145,13 @@ void Game::Start() {
             .textures = {textureCache["computer_run0"_hs], textureCache["computer_run1"_hs], textureCache["computer_run2"_hs]}
         }
 	);
-	reg.emplace<entt::tag<"character"_hs>>(character);
+	reg.emplace<Character>(character, Character {
+		.energy = 10,
+		.energyUseRate = 1,
+	});
 	reg.emplace<entt::tag<"clock"_hs>>(character);
 	reg.emplace<WalkingCharacter>(character, WalkingCharacter { .speed = 10 });
+	reg.emplace<SavedObjectTag>(character);
 
 	CreateSprite(
 		reg,
@@ -141,11 +164,52 @@ void Game::Start() {
         g::AnimationController {
         }
 	);
+
+	auto testBar = reg.create();
+	reg.emplace<g::Transform>(testBar, g::Transform {
+		.p = {10, kWindowHeight - 10},
+		.halfExtents = { 10, kWindowHeight/2 - 10 },
+	});
+	reg.emplace<g::SolidRect>(testBar, g::SolidRect {
+		.color = Color { 255, 0, 0, 255 },
+		.pivotPercent = { 0, 1 }
+	});
+	reg.emplace<g::UITag>(testBar);
+	reg.emplace<EnergyBarTag>(testBar);
 }
 
 void Game::Update() {
 	float dt = GetFrameTime();
 
+	// energy updating and UI
+	reg.view<
+		entt::tag<"player"_hs>,
+		Character
+	>().each([&](entt::entity ent, Character& ch) {
+		bool gameOver = false;
+		// decrease energy
+		ch.energy -= ch.energyUseRate * dt;
+		if(ch.energy < 0){
+			gameOver = true;
+			reg.erase<entt::tag<"player"_hs>>(ent);
+			AddGameOverUI();
+		}
+
+		reg.ctx().emplace_as<float>("energy"_hs, ch.energy);
+
+		// update ui
+		reg.view<
+			EnergyBarTag,
+			g::Transform
+		>(entt::exclude<g::HiddenTag>).each([&](entt::entity energyBar, g::Transform& t){
+			if(gameOver){
+				reg.emplace<g::HiddenTag>(energyBar);
+			}
+			t.halfExtents = { 10, (kWindowHeight/2 - 10) * b2Clamp(ch.energy / 100, 0.0f, 1.0f) };
+		});
+	});
+
+	// start jumping system
 	reg.view<
 		b2Body*,
 		const g::Transform,
@@ -190,6 +254,7 @@ void Game::Update() {
 			}
 		});
 
+	// apply jump force
 	reg.view<
 		b2Body*,
 		JumpingCharacter
@@ -197,12 +262,10 @@ void Game::Update() {
 		if(!ch.isJumping) return;
 
 		if(!reg.storage<entt::tag<"player"_hs>>().contains(e)) {
-			std::cout << "StoppedA" << std::endl;
 			ch.isJumping = false;
 		}
 		else{
 			if(!IsKeyDown(KEY_W) || GetTime() > ch.jumpStartTime + ch.jumpDuration){
-				std::cout << "Stopped" << std::endl;
 				ch.isJumping = false;
 			}
 		}
@@ -217,6 +280,8 @@ void Game::Update() {
 		sys->Update(dt);
 	}
 
+
+	// walking system
 	reg.view<b2Body*, const WalkingCharacter, entt::tag<"player"_hs>>()
 		.each([&](entt::entity entity, b2Body*& body, const WalkingCharacter& ch) {
 			b2Vec2 inputDir {
@@ -227,17 +292,29 @@ void Game::Update() {
 			inputDir.Normalize();
 
 			b2Vec2 vel = body->GetLinearVelocity();
-			vel.x = inputDir.x * ch.speed;
+			vel.x = inputDir.x * ch.speed * (reg.ctx().get<float>("energy"_hs) / 100.0f + 1.0f);
 
 			body->SetLinearVelocity(vel);
+		});
 
+	//
+	reg.view<Character, entt::tag<"player"_hs>>()
+		.each([&](entt::entity ent, Character& ch) {
 			if(IsKeyPressed(KEY_SPACE) && reg.ctx().contains<entt::entity>("touching_player"_hs)){
 				auto other = reg.ctx().get<entt::entity>("touching_player"_hs);
-				reg.remove<entt::tag<"player"_hs>>(entity);
-				reg.emplace<entt::tag<"character"_hs>>(entity);
 
-				reg.remove<entt::tag<"character"_hs>>(other);
+				reg.remove<entt::tag<"player"_hs>>(ent);
 				reg.emplace<entt::tag<"player"_hs>>(other);
+
+				// add energy from current character to other
+				auto& otherCh = reg.get<Character>(other);
+				otherCh.energy += ch.energy;
+
+				// kill the currrent character if they are temporary
+				if(reg.storage<TemporaryCharacter>().contains(ent)){
+					reg.erase<Character>(ent);
+					reg.erase<TemporaryCharacter>(ent);
+				}
 
 				reg.ctx().erase<entt::entity>("touching_player"_hs);
 			}
@@ -255,6 +332,7 @@ void Game::Update() {
 			BBResults(Game& g, b2Body* playerBody) : g{g}, playerBody{playerBody} {}
 
 			bool ReportFixture(b2Fixture* fixture) override {
+				if(fixture->GetBody() == playerBody) return true;
 				b2Vec2 vec = fixture->GetBody()->GetPosition();
 				vec -= playerBody->GetPosition();
 				float dist2 = vec.LengthSquared();
@@ -263,7 +341,7 @@ void Game::Update() {
 				if(otherDist2 < dist2) return true;
 
 				auto ent = static_cast<entt::entity>(fixture->GetBody()->GetUserData().pointer);
-				if(g.reg.storage<entt::tag<"character"_hs>>().contains(ent)) {
+				if(g.reg.storage<Character>().contains(ent)) {
 					result = std::make_pair(dist2, ent);
 				}
 				return true;
@@ -305,4 +383,32 @@ void Game::Destroy() {
 
 	textureCache.clear();
 	CloseWindow();
+}
+
+void Game::AddGameOverUI(){
+	auto text = reg.create();
+	reg.emplace<g::Transform>(text, g::Transform {
+		.p = { kWindowWidth/2, kWindowHeight/2 },
+	});
+	reg.emplace<g::UITag>(text);
+
+	reg.emplace<g::Text>(text, g::Text {
+		.font = fontCache["m5x7"_hs],
+		.text = "GAME OVER",
+		.size = 48,
+		.color = Color { 255, 0, 0, 255 },
+	});
+
+	auto spaceToRestart = reg.create();
+	reg.emplace<g::Transform>(spaceToRestart, g::Transform {
+		.p = { kWindowWidth/2, kWindowHeight/2 + 48 },
+	});
+	reg.emplace<g::UITag>(spaceToRestart);
+
+	reg.emplace<g::Text>(spaceToRestart, g::Text {
+		.font = fontCache["m5x7"_hs],
+		.text = "PRESS SPACE TO RESTART",
+		.size = 36,
+		.color = Color { 255, 0, 0, 255 },
+	});
 }
